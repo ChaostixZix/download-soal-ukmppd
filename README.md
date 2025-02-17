@@ -2,6 +2,15 @@
 
 This Python script helps organize medical PDF files into department-specific folders based on their filenames. It supports both English and Indonesian department names.
 
+## Installation
+
+1. Make sure you have Python 3.6 or higher installed
+2. Install the required dependencies using pip:
+
+```bash
+pip install google-auth-oauthlib google-auth-httplib2 google-api-python-client
+```
+
 ## Setup
 
 1. Create a folder named `study-materials` in the same directory as the script
