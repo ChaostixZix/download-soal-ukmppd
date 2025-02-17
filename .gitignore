@@ -1,5 +1,6 @@
 # Ignore downloads directory and all its contents
 downloads/
+departments/
 
 # Ignore Python cache files
 __pycache__/

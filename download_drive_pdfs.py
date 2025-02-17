@@ -17,7 +17,7 @@ def get_google_drive_service():
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
-    
+    d
     # If there are no (valid) credentials available, let the user log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -33,7 +33,7 @@ def get_google_drive_service():
 
     return build('drive', 'v3', credentials=creds)
 
-def list_files_recursive(service, folder_id, base_path='downloads', pdf_count=0, folder_count=0):
+def list_files_recursive(service, folder_id, base_path='downloads', pdf_count=0, folder_count=0, existing_files=None):
     """List all PDF files in the folder and its subfolders."""
     results = []
     folder_count += 1
@@ -55,21 +55,22 @@ def list_files_recursive(service, folder_id, base_path='downloads', pdf_count=0,
             
             for file in files:
                 if file['mimeType'] == 'application/vnd.google-apps.folder':
-                    # Create folder in local filesystem
                     new_base_path = os.path.join(base_path, file['name'])
                     os.makedirs(new_base_path, exist_ok=True)
-                    # Recursively list files in subfolder
-                    sub_results = list_files_recursive(service, file['id'], new_base_path, pdf_count, folder_count)
+                    sub_results = list_files_recursive(service, file['id'], new_base_path, pdf_count, folder_count, existing_files)
                     results.extend(sub_results)
                 elif file['mimeType'] == 'application/pdf':
-                    # Add PDF file to download list
-                    pdf_count += 1
-                    print(f"Found PDF ({pdf_count}): {file['name']}")
-                    results.append({
-                        'id': file['id'],
-                        'name': file['name'],
-                        'path': base_path
-                    })
+                    file_path = os.path.join(base_path, file['name'])
+                    if file_path not in existing_files:
+                        pdf_count += 1
+                        print(f"Found new PDF ({pdf_count}): {file['name']}")
+                        results.append({
+                            'id': file['id'],
+                            'name': file['name'],
+                            'path': base_path
+                        })
+                    else:
+                        print(f"Skipping existing PDF: {file['name']}")
             
             page_token = response.get('nextPageToken')
             if not page_token:
@@ -83,20 +84,20 @@ def list_files_recursive(service, folder_id, base_path='downloads', pdf_count=0,
 
 def download_files(service, files):
     """Download the list of files."""
-    for file in files:
+    total_files = len(files)
+    for index, file in enumerate(files, 1):
         try:
+            print(f"\nDownloading file {index}/{total_files}: {file['name']}...")
             request = service.files().get_media(fileId=file['id'])
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request)
             done = False
             
-            print(f"Downloading {file['name']}...")
             while done is False:
                 status, done = downloader.next_chunk()
                 if status:
                     print(f"Download {int(status.progress() * 100)}%")
             
-            # Save the file
             fh.seek(0)
             file_path = os.path.join(file['path'], file['name'])
             with open(file_path, 'wb') as f:
@@ -106,24 +107,39 @@ def download_files(service, files):
         except Exception as e:
             print(f"Error downloading {file['name']}: {e}")
 
+def get_existing_files(directories):
+    """Get list of existing PDF files in the specified directories."""
+    existing_files = set()
+    for directory in directories:
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.lower().endswith('.pdf'):
+                    full_path = os.path.join(root, file)
+                    existing_files.add(full_path)
+    return existing_files
+
 def main():
-    # Create downloads directory
-    os.makedirs('downloads', exist_ok=True)
+    # Create directories
+    for directory in ['downloads', 'departments']:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Get existing files
+    existing_files = get_existing_files(['downloads', 'departments'])
+    print(f"Found {len(existing_files)} existing PDF files")
     
     print("Authenticating...")
     service = get_google_drive_service()
     
-    # Replace with your shared folder ID
     folder_id = input("Enter the shared folder ID: ")
     
     print("\nListing PDF files...")
-    files = list_files_recursive(service, folder_id)
+    files = list_files_recursive(service, folder_id, base_path='downloads', existing_files=existing_files)
     
     if not files:
-        print("No PDF files found in the folder.")
+        print("No new PDF files found to download.")
         return
     
-    print(f"\nFound {len(files)} PDF files. Starting download...")
+    print(f"\nFound {len(files)} new PDF files. Starting download...")
     download_files(service, files)
     print("\nDownload completed!")
 
