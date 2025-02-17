@@ -1,0 +1,13 @@
+# Ignore downloads directory and all its contents
+downloads/
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore environment and credentials
+token.pickle
+
+# Ignore system files
+.DS_Store
